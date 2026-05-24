@@ -1,0 +1,156 @@
+// ==UserScript==
+// @name          prueba 1
+// @namespace    http://tampermonkey.net/
+// @version      4.2
+// @description  Normalize PSR output with Client Responses, Facilitator Intervention and Progress detection
+// @match        https://chatgpt.com/*
+// @match        https://chat.deepseek.com/*
+// @grant        GM_setClipboard
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    function normalizePSR() {
+        const paragraphs = document.querySelectorAll(
+            'div[data-message-author-role="assistant"] p'
+        );
+
+        paragraphs.forEach(p => {
+            if (p.dataset.psrProcessed) return;
+
+            const text = p.innerText.trim();
+            if (!text) return;
+
+            const hasQuote = text.includes('"');
+            const isProgress = /\b(minimal|moderate)\b/i.test(text);
+            const hasFacilitator = text.toLowerCase().includes('the facilitator');
+
+            if (!hasQuote && !isProgress && !hasFacilitator) return;
+
+            p.dataset.psrProcessed = "true";
+            p.innerHTML = '';
+
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+            lines.forEach(line => {
+
+                /* =========================
+                   CLIENT RESPONSE (QUOTES)
+                ========================= */
+                const quoteMatches = [...line.matchAll(/"([^"]+)"/g)];
+                if (quoteMatches.length) {
+                    quoteMatches.forEach(match => {
+                        const quote = `"${match[1]}"`;
+
+                        const cr = document.createElement('div');
+                        cr.innerText = quote;
+                        cr.style.marginLeft = '14px';
+                        cr.style.marginTop = '6px';
+                        cr.style.padding = '4px 6px';
+                        cr.style.cursor = 'pointer';
+                        cr.style.userSelect = 'none';
+                        cr.style.borderLeft = '3px solid #4CAF50';
+                        cr.style.background = 'rgba(76,175,80,0.08)';
+
+                        cr.addEventListener('mouseenter', () => {
+                            cr.style.background = 'rgba(76,175,80,0.16)';
+                        });
+                        cr.addEventListener('mouseleave', () => {
+                            cr.style.background = 'rgba(76,175,80,0.08)';
+                        });
+                        cr.addEventListener('click', () => {
+                            GM_setClipboard(quote);
+                            showBadge(cr, 'Copied');
+                        });
+
+                        p.appendChild(cr);
+                    });
+                    return;
+                }
+
+                /* =========================
+                   FACILITATOR INTERVENTION
+                ========================= */
+                if (line.toLowerCase().startsWith('the facilitator')) {
+
+                    const cleanText = line.replace(/^facilitator intervention\s*:\s*/i, '');
+
+                    const fi = document.createElement('div');
+                    fi.innerText = cleanText;
+                    fi.style.marginLeft = '14px';
+                    fi.style.marginTop = '8px';
+                    fi.style.padding = '8px 10px';
+                    fi.style.cursor = 'pointer';
+                    fi.style.userSelect = 'none';
+                    fi.style.border = '2px solid #9C27B0';
+                    fi.style.background = 'rgba(156,39,176,0.08)';
+
+                    fi.addEventListener('mouseenter', () => {
+                        fi.style.background = 'rgba(156,39,176,0.16)';
+                    });
+                    fi.addEventListener('mouseleave', () => {
+                        fi.style.background = 'rgba(156,39,176,0.08)';
+                    });
+                    fi.addEventListener('click', () => {
+                        GM_setClipboard(cleanText);
+                        showBadge(fi, 'Facilitator Copied');
+                    });
+
+                    p.appendChild(fi);
+                    return;
+                }
+
+                /* =========================
+                   PROGRESS (MINIMAL / MODERATE)
+                ========================= */
+                if (/\b(minimal|moderate)\b/i.test(line)) {
+                    const prog = document.createElement('div');
+                    prog.innerText = line;
+                    prog.style.marginLeft = '14px';
+                    prog.style.marginTop = '8px';
+                    prog.style.padding = '8px 10px';
+                    prog.style.cursor = 'pointer';
+                    prog.style.userSelect = 'none';
+                    prog.style.border = '2px dashed #2196F3';
+                    prog.style.background = 'rgba(33,150,243,0.08)';
+
+                    prog.addEventListener('mouseenter', () => {
+                        prog.style.background = 'rgba(33,150,243,0.16)';
+                    });
+                    prog.addEventListener('mouseleave', () => {
+                        prog.style.background = 'rgba(33,150,243,0.08)';
+                    });
+                    prog.addEventListener('click', () => {
+                        GM_setClipboard(line);
+                        showBadge(prog, 'Progress Copied');
+                    });
+
+                    p.appendChild(prog);
+                    return;
+                }
+
+                /* =========================
+                   OTHER TEXT
+                ========================= */
+                const normal = document.createElement('div');
+                normal.innerText = line;
+                p.appendChild(normal);
+            });
+        });
+    }
+
+    function showBadge(target, text) {
+        const badge = document.createElement('span');
+        badge.innerText = text;
+        badge.style.marginLeft = '8px';
+        badge.style.fontSize = '12px';
+        badge.style.fontWeight = 'bold';
+        badge.style.color = '#555';
+
+        target.appendChild(badge);
+        setTimeout(() => badge.remove(), 900);
+    }
+
+    setInterval(normalizePSR, 1200);
+})();
